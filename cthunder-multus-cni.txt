@@ -1,0 +1,134 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acos-config-sriov4
+data:
+  startup-config: |-
+    !
+    web-service auto-redirt disable
+    !
+    class-list CL1
+      27.3.18.0/24 lsn-lid 1
+      192.3.19.0/24 lsn-lid 2
+      10.10.0.0/16 lsn-lid 1
+      10.20.0.0/16 lsn-lid 1
+    !
+    ip dns primary 8.8.8.8
+    !
+    glm use-mgmt-port
+    glm enable-requests
+    glm allocate-bandwidth 10000
+    glm token vTh000000
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cthunder3
+spec:
+  selector:
+    matchLabels:
+      run: cthunder3
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: cthunder3
+      annotations:
+          prometheus.io/scrape: 'true'
+          prometheus.io/port: '80'
+          prometheus.io/path: '/metrics'
+          prometheus.io/scheme: 'http'
+          k8s.v1.cni.cncf.io/networks: '[
+              { "name" : "client" }
+          ]'
+
+    spec:
+#      serviceAccount: a10-priveleged # DEPRICATED!!
+      serviceAccountName: a10-account 
+
+      securityContext:
+        fsGroup: 1005
+
+      volumes:
+      - name: tmp-cfg
+        configMap:
+           name: acos-config-sriov4
+           items:
+           - key: startup-config
+             path: slb.cfg
+
+
+      containers:
+      - name: cthunder-master-3
+        image: image-registry.openshift-image-registry.svc:5000/a10-namespace/acos_non_fta_5_2_1-pcfw_146.nogui.docker
+        #imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
+#        command: [ "/bin/sh", "-c", "--" ]
+#        args: [ "while true; do sleep 30; done;" ]
+        env:
+
+        - name: ACOS_CTH_SUPPORT_MGMT
+          value: "y"
+        - name: ACOS_CTH_VETH_DRIVER_LST
+          value: "macvlan,veth,tun"
+        - name: ACOS_CTH_SUPPORT_VETH
+          value: "y"
+
+        - name: ACOS_CTH_WEBSERVICES_PORT
+          value: "80"
+        - name: ACOS_CTH_WEBSERVICES_SECURE_PORT
+          value: "443"
+        - name: ACOS_CTH_WEBSERVICES_AUTO_REDIRECT
+          value: "disable"
+
+#--------------------------------------------
+        - name: ACOS_CTH_CONFIG_PATH
+          value: "/tmp/slb.cfg"
+        - name: ACOS_CTH_CONTAINER_VERSION
+          value: 5.1.0-155
+
+        resources:
+          requests:
+            memory: 4Gi
+            cpu: "1"
+          limits:
+            memory: 4Gi
+            cpu: "1"
+
+
+        ports:
+        - containerPort: 80
+        - containerPort: 443
+        - containerPort: 22
+
+        volumeMounts:
+
+        - mountPath: "/tmp/slb.cfg"
+          subPath: slb.cfg
+          name: tmp-cfg
+
+
+        securityContext:
+          #readOnlyRootFilesystem: false
+          #privileged: false
+          #runAsUser: 1005
+          #runAsNonRoot: true
+          #capabilities:
+          #  drop:
+          #    - all
+          #  add:
+          #    - SYS_PTRACE
+          #    - NET_RAW
+          #    - IPC_LOCK
+          #    - NET_ADMIN
+          #    - CAP_MKNOD
+          #    - SYS_ADMIN
+
+
+          privileged: true
+          runAsUser: 0
+          capabilities:
+          #    #add: ["SYS_ADMIN", "NET_ADMIN","IPC_LOCK", "NET_RAW", "CAP_MKNOD"]
+              add: ["SYS_ADMIN", "NET_ADMIN","IPC_LOCK", "NET_RAW", "MKNOD"]
