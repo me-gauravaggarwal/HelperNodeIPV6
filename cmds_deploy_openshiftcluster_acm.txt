@@ -1,0 +1,447 @@
+
+#################################################################################
+#################### Deploying Spoke Cluster 4.12.6 via ACM #####################
+#################################################################################
+
+ssh root@2405:200:5f02:c392::11
+export KUBECONFIG=/root/.secret/kubeconfigs/hubcluster/kubeconfig-kubeadmin
+
+oc delete ns jio-spoke
+
+####################
+
+vi enabling_cim.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mirror-config
+  namespace: multicluster-engine
+...
+  registries.conf: |
+    unqualified-search-registries = ["registry.access.redhat.com", "docker.io"]
+
+    [[registry]]
+       prefix = ""
+       location = "registry.redhat.io/multicluster-engine"
+       mirror-by-digest-only = true
+
+       [[registry.mirror]]
+       location = "reposerver.jiocaas.com:8443/multicluster-engine"
+
+    [[registry]]
+       prefix = ""
+       location = "quay.io/openshift-release-dev/ocp-release"
+       mirror-by-digest-only = true
+
+       [[registry.mirror]]
+       location = "reposerver.jiocaas.com:8443/ocp4/openshift4"
+
+    [[registry]]
+       prefix = ""
+       location = "quay.io/openshift-release-dev/ocp-v4.0-art-dev"
+       mirror-by-digest-only = true
+
+       [[registry.mirror]]
+       location = "reposerver.jiocaas.com:8443/ocp4/openshift4"
+
+####################
+
+vi clusterimageset.yaml
+apiVersion: hive.openshift.io/v1
+kind: ClusterImageSet
+metadata:
+  creationTimestamp: "2023-03-28T03:08:50Z"
+  generation: 1
+  labels:
+    channel: fast
+    visible: "false"
+  name: openshift-v4.12.6
+  resourceVersion: "1812430985"
+  uid: 62d7e651-7f1f-4ad9-a688-d6302cefa0e1
+spec:
+  releaseImage: reposerver.jiocaas.com:8443/ocp4/openshift4:4.12.6-x86_64
+
+########################################
+
+cd cluster1-spoke/
+
+vi kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 00-namespace.yaml
+  - 01-pull-secret-sealed.yaml
+  - 03-agentclusterinstall.yaml
+  - 04-clusterdeployment.yaml
+  - 05-klusterlet.yaml
+  - 06-managedcluster.yaml
+  - 08-infraenv.yaml
+  - nm-node5-cfz03r09n05.yaml
+  - nm-node4-cfz03r09n04.yaml
+  - nm-node3-cfz03r09n03.yaml
+  - nm-node2-cfz03r09n02.yaml
+  - nm-node1-cfz03r09n01.yaml
+  - bm-node5-cfz03r09n05.yaml
+  - bm-node4-cfz03r09n04.yaml
+  - bm-node3-cfz03r09n03.yaml
+  - bm-node2-cfz03r09n02.yaml
+  - bm-node1-cfz03r09n01.yaml
+
+####################
+
+vi 00-namespace.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cluster1-spoke-jiocaas-com
+
+####################
+
+vi 01-pull-secret-sealed.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pull-secret
+  namespace: cluster1-spoke-jiocaas-com
+stringData:
+  .dockerconfigjson: '{"auths":{"reposerver.jiocaas.com:8443":{"auth":"bnBlYWRtaW46UjNnaXN0cnlAMTIz","email":"tapan.kesarwani@ril.com"},"quay.io":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K29jbV9hY2Nlc3NfYjg1YTE0ZjJkNDdkNDEzZGFlMmFjMDUwZDlhNTcwYWE6QzQ2VTBYQlFZRDc4MTJZTzlRU1RUMURDVVFZSkI3VEc4MzVHTTdPVTdZOVBXRTFFM1o4MkE5VkFPSFNFM0VVMg==","email":"tapan.kesarwani@ril.com"},"registry.connect.redhat.com":{"auth":"fHVoYy1wb29sLTAxZGU5NmNjLThkZTYtNDFlYS1iYmMwLWYwYjdhZmM1MDI0MTpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSTFaR0V4TkRkaFl6bGxNR1EwTW1FNE9HUm1NV0ppWkdFNVpEazRObVppWVNKOS53TllySlZ4N2Jrb3RmWmp5OEhjbWFQRXpiN2JKMHh0X2VLc1BCcWl2aGphT3NqYWRtR3RkSWw2ZXlHelNNOHRFM2VleFdIVk1aS2pWM3NLa1ZEVUFHQ0J1NXFRN2JhRmpIaEQwRFlmRVNIWXFLNUpjVXpZQ2s2Z2laZnlNSUJ6RE9ZOElwYnpTYXNwZXhySGVwV3VZRFpDdTB4WTFOa1A4aEpQT1YxRTZSWGNZbkhMWGNxREYyXy1wbk1yYk96TEFYdGFoQ0ZmQm5EQlNLVUhRU3hCZXVNRWZ6Nmc0TTJHLXhTdjB5WGpvYThwYzRVc2drX1dqWXcxc29RSDZFUGZNeWRsOVRESXBqQjQ5STNyMlp3cnBvWUtiZU9CYkw4RDg4TndhQzJvVlRnQUFWWFRHWHhFYnNWMzd4REdNSGtqU2t0TjhyRjBCemFDNmo5b0gya3BMeGxoRFNkWW5zcnRRV2lFSEQ2VVR2M0ZabUlxQVJab0hNQVNJdmRRZ1FjMWtxNk0yQkt0dEFRN0MwMzkzUnpud0w3aDhNWExwRWZidVQ2TGRGVnBXaGIzTXh4MzJYamRHblJqNlVYTFF3b2cwQnJidlNRalRCcHVlbW4za2ZNVDVraU5TVjFxTDRUbVZQZEJEMmh4Tm9WazBycGU5OUNncjBIblpmRXpSSEJWTGlnTWNSVlJwMWQ0ZVFzSURUYWJDeFplNHRpeGJGMHlkOTdvLXNVQ3VSMy0ycFRtRWx4VVpiN1JHMHV5QVNsalZBSFotdWJTZEw1VEE4d1k4Umk5c1dyMHpYdUZISFJCT0ZqeEREWG5iSHpzVHI3aFFLU0pSdWpMRmtDdnNEMVFKdndiN09vOGJrZk1WYnJRMmdlYmJOZnRnc183YXIwOG9Rc3g2SWhmX3ZYdw==","email":"tapan.kesarwani@ril.com"},"registry.redhat.io":{"auth":"fHVoYy1wb29sLTAxZGU5NmNjLThkZTYtNDFlYS1iYmMwLWYwYjdhZmM1MDI0MTpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSTFaR0V4TkRkaFl6bGxNR1EwTW1FNE9HUm1NV0ppWkdFNVpEazRObVppWVNKOS53TllySlZ4N2Jrb3RmWmp5OEhjbWFQRXpiN2JKMHh0X2VLc1BCcWl2aGphT3NqYWRtR3RkSWw2ZXlHelNNOHRFM2VleFdIVk1aS2pWM3NLa1ZEVUFHQ0J1NXFRN2JhRmpIaEQwRFlmRVNIWXFLNUpjVXpZQ2s2Z2laZnlNSUJ6RE9ZOElwYnpTYXNwZXhySGVwV3VZRFpDdTB4WTFOa1A4aEpQT1YxRTZSWGNZbkhMWGNxREYyXy1wbk1yYk96TEFYdGFoQ0ZmQm5EQlNLVUhRU3hCZXVNRWZ6Nmc0TTJHLXhTdjB5WGpvYThwYzRVc2drX1dqWXcxc29RSDZFUGZNeWRsOVRESXBqQjQ5STNyMlp3cnBvWUtiZU9CYkw4RDg4TndhQzJvVlRnQUFWWFRHWHhFYnNWMzd4REdNSGtqU2t0TjhyRjBCemFDNmo5b0gya3BMeGxoRFNkWW5zcnRRV2lFSEQ2VVR2M0ZabUlxQVJab0hNQVNJdmRRZ1FjMWtxNk0yQkt0dEFRN0MwMzkzUnpud0w3aDhNWExwRWZidVQ2TGRGVnBXaGIzTXh4MzJYamRHblJqNlVYTFF3b2cwQnJidlNRalRCcHVlbW4za2ZNVDVraU5TVjFxTDRUbVZQZEJEMmh4Tm9WazBycGU5OUNncjBIblpmRXpSSEJWTGlnTWNSVlJwMWQ0ZVFzSURUYWJDeFplNHRpeGJGMHlkOTdvLXNVQ3VSMy0ycFRtRWx4VVpiN1JHMHV5QVNsalZBSFotdWJTZEw1VEE4d1k4Umk5c1dyMHpYdUZISFJCT0ZqeEREWG5iSHpzVHI3aFFLU0pSdWpMRmtDdnNEMVFKdndiN09vOGJrZk1WYnJRMmdlYmJOZnRnc183YXIwOG9Rc3g2SWhmX3ZYdw==","email":"tapan.kesarwani@ril.com"}}}'
+
+####################
+
+vi 03-agentclusterinstall.yaml
+apiVersion: extensions.hive.openshift.io/v1beta1
+kind: AgentClusterInstall
+metadata:
+  name: cluster1-spoke-jiocaas-com
+  namespace: cluster1-spoke-jiocaas-com
+  annotations:
+    agent-install.openshift.io/install-config-overrides: '{"networking":{"networkType":"OVNKubernetes"}}'
+spec:
+  clusterDeploymentRef:
+    name: cluster1-spoke-jiocaas-com
+  imageSetRef:
+    name: openshift-v4.12.6
+  networking:
+    clusterNetworkMTU: 8900
+    clusterNetwork:
+      - cidr: "fd01::/48"
+        hostPrefix: 64
+    serviceNetwork:
+      - "fd02::/112"
+    machineNetwork:
+      - cidr: "2405:200:5f02:c392::/64"
+  apiVIP: 2405:200:5f02:c392::15
+  ingressVIP: 2405:200:5f02:c392::16
+  provisionRequirements:
+    controlPlaneAgents: 3
+    workerAgents: 2
+  sshPublicKey: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDfHjtAxmfqa9r3dPlksx+qJSSzDqiZ0pTDqimcgM0EZ27K7ANDhk44evTyWowypV1mNVpkHtK39Bs+px3cWDOgxf5vkPKYUjirmZHrHoDoA6exJukbPg1+McPIgooQcyap+MAV2HJ28lQ8G9A2mk84+A0Dkco/MMfN3GTeTsnVkwfbKlU/6rRrm7PFqWAzHfd13c6lQUgB6+pK78Nh/FZ8Fr6jwaHa6upXJGT8AA88AXiep3jmgou3rqBjji1veebGLC1pcExGpeqY/CV8ivokUOOYpTPP3BPinqRd2UMJq2EmNRFcDdOYMlAqZX+muHShEXT6d97xR7udK9Mdh0h4pe12h17VoEQXV7ls9xVRYJ02sDv+33vPZpY4l+xYp19e9/4fCM7KRTj7voPvwdhyy0enAgB8toyfCAR+GuTzPQny01e++GiLC6M/Z6XePG5QxeFnMnMI6UHmX/WahUDi3IUV2k95FZ0whsFzvBhfKkA63y/QphzyM5MLmbvTBTE= root@helper.jiocaas.com"
+
+####################
+
+vi 04-clusterdeployment.yaml
+apiVersion: hive.openshift.io/v1
+kind: ClusterDeployment
+metadata:
+  name: cluster1-spoke-jiocaas-com
+  namespace: cluster1-spoke-jiocaas-com
+spec:
+  baseDomain: spoke.jiocaas.com
+  clusterName: cluster1
+  controlPlaneConfig:
+    servingCertificates: {}
+  installed: false
+  clusterInstallRef:
+    group: extensions.hive.openshift.io
+    kind: AgentClusterInstall
+    name: cluster1-spoke-jiocaas-com
+    version: v1beta1
+  platform:
+    agentBareMetal:
+      agentSelector:
+        matchLabels:
+          cluster-name: "cluster1-spoke-jiocaas-com"
+  pullSecretRef:
+    name: pull-secret
+
+####################
+
+vi 05-klusterlet.yaml
+apiVersion: agent.open-cluster-management.io/v1
+kind: KlusterletAddonConfig
+metadata:
+  name: cluster1-spoke-jiocaas-com
+  namespace: cluster1-spoke-jiocaas-com
+spec:
+  applicationManager:
+    argocdCluster: false
+    enabled: true
+  certPolicyController:
+    enabled: true
+  clusterLabels:
+    name: cluster
+    cluster-name: cluster1-spoke-jiocaas-com
+    cloud: Baremetal
+    vendor: OpenShift
+  clusterName: cluster1
+  clusterNamespace: cluster1-spoke-jiocaas-com
+  iamPolicyController:
+    enabled: true
+  policyController:
+    enabled: true
+  searchCollector:
+    enabled: true
+  version: 2.7.2
+
+####################
+
+vi 06-managedcluster.yaml
+apiVersion: cluster.open-cluster-management.io/v1
+kind: ManagedCluster
+metadata:
+  name: cluster1-spoke-jiocaas-com
+  namespace: cluster1-spoke-jiocaas-com
+  labels:
+    name: "cluster1-spoke-jiocaas-com"
+    cluster-name: cluster1-spoke-jiocaas-com
+    sno: "false"
+    usage: "production"
+    remote-cluster: "true"
+
+    # Labels for OpenShift Gitops
+    cluster.open-cluster-management.io/clusterset: "spoke"
+    vendor: "OpenShift"
+
+spec:
+  hubAcceptsClient: true
+  leaseDurationSeconds: 60
+
+####################
+
+vi 08-infraenv.yaml
+apiVersion: agent-install.openshift.io/v1beta1
+kind: InfraEnv
+metadata:
+  name: cluster1-spoke-jiocaas-com
+  namespace: cluster1-spoke-jiocaas-com
+  annotations:
+    argocd.argoproj.io/sync-options: Validate=false
+spec:
+  clusterRef:
+    name: cluster1-spoke-jiocaas-com
+    namespace: cluster1-spoke-jiocaas-com
+  sshAuthorizedKey: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDfHjtAxmfqa9r3dPlksx+qJSSzDqiZ0pTDqimcgM0EZ27K7ANDhk44evTyWowypV1mNVpkHtK39Bs+px3cWDOgxf5vkPKYUjirmZHrHoDoA6exJukbPg1+McPIgooQcyap+MAV2HJ28lQ8G9A2mk84+A0Dkco/MMfN3GTeTsnVkwfbKlU/6rRrm7PFqWAzHfd13c6lQUgB6+pK78Nh/FZ8Fr6jwaHa6upXJGT8AA88AXiep3jmgou3rqBjji1veebGLC1pcExGpeqY/CV8ivokUOOYpTPP3BPinqRd2UMJq2EmNRFcDdOYMlAqZX+muHShEXT6d97xR7udK9Mdh0h4pe12h17VoEQXV7ls9xVRYJ02sDv+33vPZpY4l+xYp19e9/4fCM7KRTj7voPvwdhyy0enAgB8toyfCAR+GuTzPQny01e++GiLC6M/Z6XePG5QxeFnMnMI6UHmX/WahUDi3IUV2k95FZ0whsFzvBhfKkA63y/QphzyM5MLmbvTBTE= root@helper.jiocaas.com'
+  additionalNTPSources:
+    - "2405:200:801:c00::c42"
+    - "2405:200:801:c00::c43"
+
+  agentLabelSelector:
+    matchLabels:
+      cluster-name: cluster1-spoke-jiocaas-com
+  pullSecretRef:
+    name: pull-secret
+  nmStateConfigLabelSelector:
+    matchLabels:
+      cluster-name: cluster1-spoke-jiocaas-com
+
+####################
+
+vi bm-node1-cfz03r09n01.yaml
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: bmc-secret-cfz03r09n01
+  namespace: cluster1-spoke-jiocaas-com
+stringData:
+  username: npeadmin
+  password: NP3admin
+
+---
+apiVersion: metal3.io/v1alpha1
+kind: BareMetalHost
+metadata:
+  name: cluster1-spoke-cfz03r09n01
+  namespace: cluster1-spoke-jiocaas-com
+  labels:
+    infraenvs.agent-install.openshift.io: "cluster1-spoke-jiocaas-com"
+    cluster-name: cluster1-spoke-jiocaas-com
+  annotations:
+    inspect.metal3.io: disabled
+    bmac.agent-install.openshift.io/hostname: "cfz03r09n01"
+spec:
+  online: true
+  bootMACAddress: 5c:ed:8c:31:df:e8
+  automatedCleaningMode: metadata
+  rootDeviceHints:
+    deviceName: "/dev/sde"
+  bmc:
+    address: ilo5-virtualmedia+https://[2405:200:5F02:C390::94]/redfish/v1/Systems/1
+    credentialsName: bmc-secret-cfz03r09n01
+    disableCertificateVerification: true
+
+####################
+
+vi nm-node1-cfz03r09n01.yaml
+---
+apiVersion: agent-install.openshift.io/v1beta1
+kind: NMStateConfig
+metadata:
+  name: cluster1-spoke-cfz03r09n01
+  namespace: cluster1-spoke-jiocaas-com
+  labels:
+    cluster-name: cluster1-spoke-jiocaas-com
+spec:
+  config:
+    dns-resolver:
+      config:
+        search:
+        - spoke.jiocaas.com
+        server:
+        - 2405:200:5f02:c392::12
+    interfaces:
+    - name: bond0
+      ipv4:
+        enabled: false
+      ipv6:
+        enabled: false
+      link-aggregation:
+        mode: active-backup
+        options:
+          miimon: 100
+        port:
+        - ens2f0
+        - ens4f0
+      state: up
+      mtu: 9000
+      type: bond
+    - name: bond0.392
+      ipv4:
+        enabled: false
+      ipv6:
+        address:
+        - ip: 2405:200:5f02:c392::94
+          prefix-length: 64
+        autoconf: false
+        dhcp: false
+        enabled: true
+      state: up
+      type: vlan
+      vlan:
+        base-iface: bond0
+        id: 392
+    routes:
+      config:
+      - destination: 2405:200:801:c00::/64
+        next-hop-address: 2405:200:5f02:c392::1
+        next-hop-interface: bond0.392
+      - destination: ::/0
+        next-hop-address: 2405:200:5f02:c392::1
+        next-hop-interface: bond0.392
+  interfaces:
+    - name: "ens2f0"
+      macAddress: "88:e9:a4:59:1a:e8"
+    - name: "ens4f0"
+      macAddress: "88:e9:a4:59:1a:ec"
+
+####################
+
+oc apply -k /root/cluster1-spoke/
+
+
+########################################
+
+oc get service/kubernetes -o yaml
+kind: Service
+metadata:
+  creationTimestamp: "2023-03-25T18:04:02Z"
+  labels:
+    component: apiserver
+    provider: kubernetes
+  name: kubernetes
+  namespace: default
+  resourceVersion: "237"
+  uid: cb7a8adb-15ae-491f-872a-eef3c5a0ace5
+spec:
+  clusterIP: fd02::1
+  clusterIPs:
+  - fd02::1
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv6
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: 6443
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+
+oc get service/openshift -o yaml
+
+oc apply -k /root/cluster1-spoke/
+
+oc get events -n cluster1-spoke-jiocaas-com
+LAST SEEN   TYPE     REASON               OBJECT                                    MESSAGE
+6m54s       Normal   BMCAccessValidated   baremetalhost/cluster1-spoke-cfz03r09n04   Verified access to BMC
+6m54s       Normal   BMCAccessValidated   baremetalhost/cluster1-spoke-cfz03r09n03   Verified access to BMC
+6m53s       Normal   BMCAccessValidated   baremetalhost/cluster1-spoke-cfz03r09n05   Verified access to BMC
+6m54s       Normal   BMCAccessValidated   baremetalhost/cluster1-spoke-cfz03r09n02   Verified access to BMC
+6m53s       Normal   BMCAccessValidated   baremetalhost/cluster1-spoke-cfz03r09n01   Verified access to BMC
+6m54s       Normal   ProfileSet           baremetalhost/cluster1-spoke-cfz03r09n02   Hardware profile set: unknown
+6m54s       Normal   ProfileSet           baremetalhost/cluster1-spoke-cfz03r09n03   Hardware profile set: unknown
+6m54s       Normal   ProfileSet           baremetalhost/cluster1-spoke-cfz03r09n01   Hardware profile set: unknown
+6m54s       Normal   ProfileSet           baremetalhost/cluster1-spoke-cfz03r09n04   Hardware profile set: unknown
+6m54s       Normal   ProfileSet           baremetalhost/cluster1-spoke-cfz03r09n05   Hardware profile set: unknown
+7m16s       Normal   Registered           baremetalhost/cluster1-spoke-cfz03r09n03   Registered new host
+7m16s       Normal   Registered           baremetalhost/cluster1-spoke-cfz03r09n01   Registered new host
+7m16s       Normal   Registered           baremetalhost/cluster1-spoke-cfz03r09n04   Registered new host
+7m16s       Normal   Registered           baremetalhost/cluster1-spoke-cfz03r09n05   Registered new host
+7m16s       Normal   Registered           baremetalhost/cluster1-spoke-cfz03r09n02   Registered new host
+
+oc get bmh -n cluster1-spoke-jiocaas-com
+NAME                        STATE       CONSUMER   ONLINE   ERROR   AGE
+cluster1-spoke-cfz03r09n01   available              true             16m
+cluster1-spoke-cfz03r09n02   available              true             16m
+cluster1-spoke-cfz03r09n03   available              true             16m
+cluster1-spoke-cfz03r09n04   available              true             16m
+cluster1-spoke-cfz03r09n05   available              true             16m
+
+
+########################################
+
+oc get pods -n cluster1-spoke-jiocaas-com
+NAME                                        READY   STATUS                  RESTARTS   AGE
+cluster1-spoke-jiocaas-com-imageset-wsgsq   0/1     Init:ImagePullBackOff   0          29s
+
+oc edit clusterimageset -n multicluster-engine
+...
+spec:
+  releaseImage: reposerver.jiocaas.com:8443/ocp4/openshift4:4.12.6-x86_64
+...
+clusterimageset.hive.openshift.io/openshift-v4.12.6 edited
+
+oc get pods -n cluster1-spoke-jiocaas-com
+NAME                                        READY   STATUS                  RESTARTS   AGE
+cluster1-spoke-jiocaas-com-imageset-wsgsq   0/1     Init:ImagePullBackOff   0          118s
+
+oc get pods -n cluster1-spoke-jiocaas-com
+NAME                                        READY   STATUS        RESTARTS   AGE
+cluster1-spoke-jiocaas-com-imageset-wsgsq   0/1     Terminating   0          2m2s
+
+oc get pods -n cluster1-spoke-jiocaas-com
+NAME                                        READY   STATUS     RESTARTS   AGE
+cluster1-spoke-jiocaas-com-imageset-kppc9   0/1     Init:0/1   0          1s
+
+oc get pods -n cluster1-spoke-jiocaas-com
+NAME                                        READY   STATUS    RESTARTS   AGE
+cluster1-spoke-jiocaas-com-imageset-kppc9   1/1     Running   0          5s
+
+
+########################################
+
