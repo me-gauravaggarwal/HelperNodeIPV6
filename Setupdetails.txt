@@ -1,0 +1,21 @@
+Node	ILO IP	Mgmt IP	Bond0.392
+Basehost	2405:200:5f02:C390::98        	2405:200:5f02:C392::98	Ens2f0 & ens4f0
+Helper	VM	2405:200:5f02:C392::50        	Eth0
+Repo	VM	2405:200:5f02:C392::53	Eth0
+DNS        	VM	2405:200:5f02:C392::52	Eth0
+Hubcluster Master0	2405:200:5F02:C390::9a	2405:200:5F02:C392::61	Ens2f0 & ens4f0
+Hubcluster Master1	2405:200:5F02:C390::9b	2405:200:5F02:C392::62	Ens2f0 & ens4f0
+Hubcluster Master2	2405:200:5F02:C390::9c	2405:200:5F02:C392::63	Ens2f0 & ens4f0
+Spokecluster Master0	2405:200:5F02:C390::9d	2405:200:5F02:C392::71	Ens2f0 & ens4f0
+Spokecluster Master1	2405:200:5F02:C390::9e	2405:200:5F02:C392::72	Ens2f0 & ens4f0
+Spokecluster Master2	2405:200:5F02:C390::9f	2405:200:5F02:C392::73	Ens2f0 & ens4f0
+ 
+VIP1: 2405:200:5F02:C392::74
+VIP2: 2405:200:5F02:C392::75
+ 
+All ILO uname/pwd: foundry/F0unDry!
+All Mgmt uname/pwd: root123
+Basehost OS uname/pwd: jio/root123
+ 
+All other passwords are stored in basehost:
+/home/passwords.txt
