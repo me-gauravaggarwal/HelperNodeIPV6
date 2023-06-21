@@ -1,0 +1,54 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: cthunder-cx6
+  namespace: a10-cgnat-cx6-deployment
+  labels:
+  app: acos
+  deployment: acos
+  annotations:
+    k8s.v1.cni.cncf.io/networks: mlx-sriov-network01,mlx-sriov-network02
+spec:
+  securityContext:
+    privileged: true
+    runAsUser: 0
+  restartPolicy: Always
+  serviceAccountName: a10-cgnat-cx6
+  serviceAccount: a10-cgnat-cx6
+  nodeName: ocp-w-2.lab.a10demo.ocp  
+  containers:
+  - name: acos  
+    resources:
+      limits:
+        hugepages-1Gi: 32Gi
+        cpu: '24'
+        memory: 128Gi
+      requests:
+        hugepages-1Gi: 32Gi
+        cpu: '24'
+        memory: 128Gi
+    env:
+      - name: ACOS_CTH_SUPPORT_MGMT
+        value: 'y'
+      - name: ACOS_CTH_SUPPORT_SRIOV
+        value: 'y'
+      - name: ACOS_CTH_CORES_ALLOWED
+        value: "24"
+      - name: ACOS_CTH_CORE_MODE
+        value: "allmask"
+      - name: ACOS_CTH_DEVICES_OPTS
+        value: "1G@0=32,1G@1=0,mount"
+      - name: ACOS_CTH_DEVICES_LIST
+        value: device-addr=4b:00.0;device-type=sriov;,device-addr=4b:00.1;device-type=sriov;
+    image: docker.io/rohita10/acos_docker_6_0_0-p2_27_nogui_15267
+    ports:
+      - containerPort: 80
+      - containerPort: 443
+      - containerPort: 22
+    securityContext:
+      privileged: true
+      runAsUser: 0
+      capabilities:
+        add: ["IPC_LOCK","SYS_ADMIN","NET_ADMIN"]
+  nodeSelector:
+    cpumanager: "true"
